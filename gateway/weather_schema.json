@@ -1,0 +1,40 @@
+{
+  "name": "get_weather_forecast",
+  "description": "Fetch real-time weather for origin & destination using WeatherAPI.com",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "origin": {
+        "type": "object",
+        "properties": {
+          "lat": { "type": "number" },
+          "lon": { "type": "number" }
+        },
+        "required": ["lat", "lon"]
+      },
+      "dest": {
+        "type": "object",
+        "properties": {
+          "lat": { "type": "number" },
+          "lon": { "type": "number" }
+        },
+        "required": ["lat", "lon"]
+      }
+    },
+    "required": ["origin", "dest"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "origin_weather": { "type": "object" },
+      "dest_weather": { "type": "object" },
+      "risk_flags": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "recommendation": { "type": "string" },
+      "expires_at": { "type": "string" }
+    },
+    "required": ["origin_weather", "dest_weather"]
+  }
+}
