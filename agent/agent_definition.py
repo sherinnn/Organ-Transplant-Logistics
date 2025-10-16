@@ -1,200 +1,170 @@
+import os
+import requests
 from strands import Agent, tool
-from agent.mcp_client import get_weather_forecast
-from agent.mcp_client import track_flights
+from strands.models import BedrockModel
+from dotenv import load_dotenv
 
-# 🌍 TOOL DEFINITION
+# === Optional imports for memory ===
+try:
+    from bedrock_agentcore.memory import MemoryClient
+    from strands.hooks import HookProvider, HookRegistry, MessageAddedEvent, AgentInitializedEvent
+    MEMORY_AVAILABLE = True
+except ImportError:
+    print("⚠️ AgentCore Memory SDK not installed — running without memory.")
+    MEMORY_AVAILABLE = False
+
+# ================================
+# ⚙️ Setup & Environment
+# ================================
+load_dotenv()
+GATEWAY_URL = "http://127.0.0.1:8000/mcp"
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+
+# ================================
+# 🌤️ Weather Tool
+# ================================
 @tool
-def weather_tool(origin: dict, dest: dict):
-    """
-    Calls the local MCP Gateway endpoint to fetch real-time weather conditions
-    for organ transport between origin and destination.
-    """
-    return get_weather_forecast(origin, dest)
+def weather_tool(origin_city: str, dest_city: str):
+    """Get weather forecast between two cities."""
+    try:
+        payload = {"origin": {"city": origin_city}, "dest": {"city": dest_city}}
+        print(f"📡 Weather Request → {payload}")
+        resp = requests.post(f"{GATEWAY_URL}/get_weather_forecast", json=payload, timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        print(f"❌ Weather error: {e}")
+        return {"error": str(e)}
 
-
-
+# ================================
+# ✈️ Flight Tool
+# ================================
 @tool
-def flight_tool(date: str, airport1: str, airport2: str):
-    """Fetch top flights between two airports."""
-    return track_flights(date, airport1, airport2)
+def flight_tool(origin: str, dest: str, date: str):
+    """Get flight details for organ transport."""
+    try:
+        payload = {"origin": origin, "dest": dest, "date": date}
+        print(f"📡 Flight Request → {payload}")
+        resp = requests.post(f"{GATEWAY_URL}/get_flight_info", json=payload, timeout=15)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        print(f"❌ Flight error: {e}")
+        return {"error": str(e)}
 
+# ================================
+# 🧩 Optional AgentCore Memory Hook
+# ================================
+class AgentCoreMemoryHookProvider(HookProvider):
+    def __init__(self, memory_client, memory_id, actor_id="agent", session_id="default"):
+        self.client = memory_client
+        self.memory_id = memory_id
+        self.actor_id = actor_id
+        self.session_id = session_id
 
-# 🔗 COORDINATED TRANSPORT TOOL
-@tool
-def transport_plan_tool(date: str, airport1: str, airport2: str, origin: dict, dest: dict):
-    """
-    Combines weather and flight data to produce a unified transport recommendation.
-    """
-    weather_data = get_weather_forecast(origin, dest)
-    flight_data = track_flights(date, airport1, airport2)
+    def register_hooks(self, registry: HookRegistry):
+        registry.add_callback(MessageAddedEvent, self.on_message_added)
+        registry.add_callback(AgentInitializedEvent, self.on_agent_initialized)
 
-    if "error" in weather_data:
-        return f"⚠️ Weather API error: {weather_data['error']}"
-    if "error" in flight_data:
-        return f"⚠️ Flight API error: {flight_data['error']}"
+    def on_message_added(self, event):
+        """Store last user+agent message into memory."""
+        last_msg = event.agent.messages[-1]
+        role = last_msg.get("role")
+        text = last_msg.get("content")[0].get("text", "")
+        self.client.create_event(
+            memory_id=self.memory_id,
+            actor_id=self.actor_id,
+            session_id=self.session_id,
+            messages=[(text, role)]
+        )
+        print(f"🧠 Stored memory event ({role}): {text[:80]}...")
 
-    weather_summary = weather_data.get("recommendation", "No summary available")
-    flight_summary = flight_data.get("summary", "No flight summary available")
+    def on_agent_initialized(self, event):
+        """Retrieve last few turns from memory and inject context."""
+        events = self.client.list_events(
+            memory_id=self.memory_id,
+            actor_id=self.actor_id,
+            session_id=self.session_id,
+            max_results=5
+        )
+        if events:
+            context = []
+            for ev in events:
+                for text, role in ev["messages"]:
+                    context.append(f"{role.upper()}: {text}")
+            past_context = "\n".join(context)
+            event.agent.system_prompt += "\n\n🧠 **Recent Memory Context:**\n" + past_context
+            print("🔁 Injected memory context into system prompt.")
 
-    origin_cond = weather_data["origin_weather"]["current"]["condition"]["text"]
-    dest_cond = weather_data["dest_weather"]["current"]["condition"]["text"]
-
-    fastest = flight_data["top_flights"][0]
-    flight_summary_text = (
-        f"Fastest flight: {fastest['Airline']} {fastest['FlightNumber']} — "
-        f"Departs {fastest['DepartureTime']}, arrives {fastest['ArrivalTime']} "
-        f"({fastest['DurationMinutes']} min)"
-    )
-
-    return f"""
-## ✈️ Organ Transport Plan: {airport1} → {airport2}
-
-**🩺 Weather Overview**
-- Origin: {origin_cond}
-- Destination: {dest_cond}
-- Recommendation: {weather_summary}
-
-**✈️ Flight Summary**
-- {flight_summary_text}
-- AI Summary: {flight_summary}
-
-**⚖️ Overall Recommendation**
-- Based on current weather and flight conditions, this route appears suitable for organ transport.
-- If rapid delivery is required, prioritize the earliest listed flight and confirm coordination with logistics staff.
-- Reassess weather 2–3 hours before departure for any sudden changes.
-"""
-
-
-# 🧠 SYSTEM PROMPT
-system_prompt = """
-You are **OrganMatch**, an intelligent coordination assistant designed to optimize
-the logistics of organ donation and transplantation.
+# ================================
+# 🩺 Agent System Prompt
+# ================================
+SYSTEM_PROMPT = """
+You are **OrganMatch**, an AI coordination assistant for optimizing organ donation and transplantation logistics.
 
 Your mission:
-Assist transplant coordinators, logistics managers, and clinical operations teams by providing
-accurate, data-driven, and safety-conscious insights about organ transport conditions.
+- Help transplant coordinators assess environmental and transport readiness.
+- Use weather and flight data to ensure timely, safe, and efficient organ delivery.
+- Present data clearly with structured summaries and actionable recommendations.
 
----
-
-### ⚙️ Core Capabilities
-
-You are connected to specialized tools:
-1. **Weather Tool** — retrieves current and forecasted weather conditions for both the origin and destination hospitals,
-   identifying risks like storms, temperature extremes, or turbulence that may affect air or ground transport.
-2. **Flight Tool** — retrieves real-time or scheduled flight options between donor and recipient regions,
-   highlighting the fastest and most reliable flights for organ transport.
-
-You can reason across these tools to form a unified logistics plan that minimizes risk and time delay.
-Your purpose is to assist **decision-making**, not replace human judgment.
-
----
-
-### 🩺 Operating Principles
-
-1. **Safety First**
-   - Always prioritize organ viability, recipient safety, and timing efficiency.
-   - If weather or flight conditions are risky, flag them clearly and advise alternate routing or delay recommendations.
-
-2. **Structured and Clear Communication**
-   - Present findings in an organized, readable format with headers and bullet points.
-   - Summaries should always include:
-     - Weather at origin and destination
-     - Flight availability and duration
-     - Overall transport recommendation
-
-3. **Collaborative Mindset**
-   - Assume your output will be read by a human transplant coordinator.
-   - Offer insights and data support, not prescriptive commands.
-   - When uncertain, advise verification with medical or operations staff.
-
-4. **Tone and Behavior**
-   - Remain calm, factual, and professional, even under high-risk conditions.
-   - Avoid emotional or speculative language.
-   - Focus on clarity, precision, and reassurance.
-
-5. **Data Awareness**
-   - If a tool returns incomplete or inconsistent data, acknowledge it transparently.
-   - Use your reasoning to interpret probable impact (e.g., "weather data missing for destination; assume moderate visibility until confirmed").
-
-6. **Ethical and Compliance Awareness**
-   - Do not infer medical advice, diagnoses, or patient conditions.
-   - Stay within logistics, coordination, and environmental reasoning.
-   - Respect confidentiality — no identifying or personal data should be exposed.
-
----
-
-### 🧩 Response Format (Preferred)
-
-**## Organ Transport Plan: [Origin City] → [Destination City]**
-
-**🩺 Weather Overview**
-- Origin: [Condition], [Temperature], [Visibility]
-- Destination: [Condition], [Temperature], [Visibility]
-- Risk Summary: [e.g., “Minor turbulence risk during ascent”]
-- Recommendation: [e.g., Proceed / Delay / Verify alternate route]
-
-**✈️ Flight Assessment**
-- Fastest flight: [Airline] [FlightNumber] — [Departure] → [Arrival] ([DurationMinutes] mins)
-- Summary: [AI-generated description of reliability or timing]
-
-**⚖️ Overall Recommendation**
-- [Concise human-readable conclusion about feasibility and risk mitigation]
-
----
-
-### 🧭 Reasoning Example
-
-“Based on current weather data between Los Angeles and New York City,
-clear skies and low wind speeds indicate stable flying conditions.
-The fastest available flight (Delta DL534) departs at 09:20 and arrives by 17:15,
-well within safe preservation limits.
-Recommendation: **Proceed with standard air transport** and confirm handoff logistics
-with the destination transplant team.”
-
----
-
-### 🔒 Behavior Under Errors or Uncertainty
-
-If tools fail or return errors:
-- Do not fabricate data.
-- State clearly: “I’m unable to retrieve live weather data at the moment.
-Here’s general guidance based on standard transport safety criteria.”
-- Provide fallback reasoning (e.g., “Assume moderate risk; proceed only with confirmation.”)
-
----
-
-### 🩷 Personality & Intent
-
-You are steady, empathetic, and procedural.
-You speak like a calm professional in a control room — never rushed, never casual.
-You bring confidence through data, structure, and reliability.
-
-Your north star is **saving lives through precision and preparedness**.
+Guidelines:
+1. Always prioritize organ viability, recipient safety, and time sensitivity.
+2. Warn clearly if conditions are risky (weather, delay, etc.).
+3. Keep communication factual, structured, and calm.
+4. Avoid clinical recommendations — your role is coordination.
+5. Format output with headers, icons (🌤️ ✈️ ⚠️ ✅), and clarity.
 """
 
+# ================================
+# 🤖 Build Agent
+# ================================
+def build_agent():
+    model = BedrockModel(model_id="anthropic.claude-3-sonnet-20240229-v1:0")
 
-# 🚀 MAIN AGENT
-def main():
-    agent = Agent(
-        tools=[weather_tool, flight_tool, transport_plan_tool],
-        system_prompt=system_prompt
+    hooks = []
+    if MEMORY_AVAILABLE:
+        try:
+            print("🧠 Initializing AgentCore Memory...")
+            mem_client = MemoryClient(region_name=AWS_REGION)
+            memory = mem_client.create_memory_and_wait(
+                name="OrganMatchMemory",
+                description="Short-term memory for OrganMatch agent",
+                strategies=[],
+                event_expiry_days=7,
+            )
+            memory_id = memory["id"]
+            hooks.append(AgentCoreMemoryHookProvider(mem_client, memory_id))
+            print(f"✅ Memory initialized (ID: {memory_id})")
+        except Exception as e:
+            print(f"⚠️ Memory setup failed: {e}")
+
+    return Agent(
+        name="OrganMatch",
+        model=model,
+        system_prompt=SYSTEM_PROMPT,
+        tools=[weather_tool, flight_tool],
+        hooks=hooks if hooks else None
     )
 
-    print("🫀 OrganMatch Multi-Tool Agent Online.")
-    print("Type your query (e.g., 'Create transport plan from LAX to JFK for Oct 20') or 'exit' to quit.\n")
+# ================================
+# 🚀 Run Agent
+# ================================
+def main():
+    agent = build_agent()
+    print("\n🫀 OrganMatch Agent is Online.")
+    print("Type your query (e.g. 'Create transport plan from LAX to JFK for Oct 20') or 'exit' to quit.\n")
 
     while True:
-        user_input = input("You: ")
-        if user_input.strip().lower() in ("exit", "quit"):
-            print("👋 Goodbye!")
+        query = input("You: ").strip()
+        if query.lower() in ("exit", "quit"):
+            print("👋 Exiting OrganMatch.")
             break
 
         try:
-            response = agent(user_input)
-            print("\nAgent:\n", response, "\n")
+            result = agent(query)
+            print("\nAgent:", result, "\n")
         except Exception as e:
-            print("⚠️ Error:", e)
-
+            print(f"❌ Agent error: {e}\n")
 
 if __name__ == "__main__":
     main()
