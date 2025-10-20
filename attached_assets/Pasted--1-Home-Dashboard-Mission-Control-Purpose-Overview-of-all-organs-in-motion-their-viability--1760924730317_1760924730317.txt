@@ -1,0 +1,147 @@
+🏠 1. Home Dashboard (Mission Control)
+
+Purpose: Overview of all organs in motion — their viability, current match status, and transport progress.
+
+🔹 Layout
++-------------------------------------------------------+
+| 🫀 OrganMatch AI Dashboard       [Search 🔍] [User 👤]  |
++-------------------------------------------------------+
+| [➕ Add New Organ]     [🧮 Run Matching]     [⚙️ Settings] |
++-------------------------------------------------------+
+|  🟢 Active Organs    |  🟠 In Transit   |  🔴 Expiring Soon |
++-------------------------------------------------------+
+|  [Organ Card Grid / Table View]                      |
+|   - Organ ID, Type, Condition, Remaining Hours        |
+|   - Matched Recipient ID, Status, Location            |
+|   - Quick Actions: View | Match | Transport           |
++-------------------------------------------------------+
+| 📊 Summary Stats: Total Organs | Avg Match Time | Success Rate |
++-------------------------------------------------------+
+
+💡 Design Tips
+
+Color codes: Green (Healthy), Yellow (Expiring Soon), Red (Critical)
+
+Hover: Shows donor details + current match summary
+
+Click: Opens detailed view (next section)
+
+🧬 2. Organ Details + Viability Check
+
+Purpose: Input donor and organ details → run Viability Tool (Lambda) to estimate remaining hours.
+
+🔹 Layout
+
+Left: Organ Entry Form
+
+Field	Input Type
+Donor ID	Auto-generated / Manual
+Organ Type	Dropdown (Heart, Liver, Kidney, etc.)
+Condition Score	Numeric slider (0–100)
+Time of Death	Datetime picker
+Current Time	Auto / Manual
+Temperature (°C)	Numeric
+Location	Dropdown (Hospital or GPS)
+
+🧠 Button: Run Viability Check
+
+Right: Viability Result Panel
+
+🫀 Organ: Heart  
+⏱️ Time Since Death: 3.2 hours  
+💚 Viable for another 5.8 hours  
+⚙️ Condition: Excellent (Score 90)
+
+
+📤 “Proceed to Matching” → routes to next module
+
+🧩 3. Organ Matching Page
+
+Purpose: Automatically find the best recipient from the database.
+
+🔹 Layout
+
+Top Bar: “🧮 Matching Engine Results”
+
+Filter Controls: Organ type | Urgency | Location radius
+
+Results Table:
+| Recipient ID | Match Score | Distance (km) | Urgency | Status |
+|---------------|-------------|----------------|----------|--------|
+| R045 | 0.89 | 420 | 5 | ✅ Best Match |
+| R012 | 0.76 | 520 | 4 | Pending |
+
+⚙️ Backend Call: matcher_tool() Lambda or Bedrock Agent
+✅ Button: “Confirm Match” → triggers transport planning view
+
+Right Panel (Mini Card):
+
+📍 Recipient: R045
+🏥 Hospital: Boston General
+🧫 Blood Type: O+
+📈 Match Confidence: 89%
+
+✈️ 4. Transport Planning Page
+
+Purpose: Integrate flight & weather data for real-time logistics.
+
+🔹 Layout
+
+Map View (Center):
+
+Donor → Recipient route visualized
+
+Flight paths overlay
+
+Weather icons along route (☀️ / 🌧️ / ⚠️)
+
+Left Panel: Flight Options
+
+Airline	Departure	Arrival	Duration	Weather Risk
+Delta 290	15:00	21:20	6h 20m	Low ☀️
+JetBlue 408	16:10	22:30	6h 20m	Moderate 🌧️
+
+Buttons:
+✈️ Book Flight
+🌤️ Recheck Weather
+🛰️ Track Route in Real Time
+
+Right Panel: Transport Summary
+
+🫀 Organ: Heart D003  
+📍 From: UCLA Medical  
+🏥 To: Boston General  
+⏱️ Total Delivery ETA: 6.3 hours  
+💚 Viable for: 5.8 hours (🚨 Risk Alert!)
+
+
+Shows countdown timer if ETA > viability
+
+📊 5. Analytics & Logs (Optional Page)
+
+If you want a final tab for the hackathon demo:
+
+Successful deliveries per day
+
+Avg viability preserved
+
+Weather-related delays
+
+Flight booking success rate
+
+Graphs:
+
+Line chart (Transport Time vs Viability)
+
+Pie chart (Organs Saved by Type)
+
+⚙️ Navigation Sidebar
+
+A clean left sidebar keeps everything accessible:
+
+🏠 Dashboard
+🧬 Organ Viability
+🧮 Matching
+✈️ Transport
+📊 Analytics
+🤖 AI Assistant
