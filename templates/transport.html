@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}Transport Planning - OrganMatch{% endblock %}
+
+{% block body %}
+<!-- Header -->
+<div class="header">
+    <div class="header-content">
+        <a href="/" class="logo">
+            <div class="logo-icon">
+                <i class="fas fa-heartbeat"></i>
+            </div>
+            <span class="logo-text">OrganMatch</span>
+        </a>
+        
+        <div class="header-nav">
+            <div class="system-status">
+                <div class="status-indicator online"></div>
+                <span class="status-text">System Online</span>
+            </div>
+            <a href="/" class="about-btn">Home</a>
+            <i class="fas fa-user-circle user-icon"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Main Layout with Sidebar -->
+<div class="app-container">
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+        <a href="/dashboard" class="nav-item">
+            <i class="fas fa-home"></i>
+            <span>Dashboard</span>
+        </a>
+        <a href="/organ-details" class="nav-item">
+            <i class="fas fa-heartbeat"></i>
+            <span>Organ Viability</span>
+        </a>
+        <a href="/matching" class="nav-item">
+            <i class="fas fa-sync-alt"></i>
+            <span>Matching</span>
+        </a>
+        <a href="/transport" class="nav-item active">
+            <i class="fas fa-plane"></i>
+            <span>Transport</span>
+        </a>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-panel">
+        <h1 class="page-title">✈️ Transport Planning</h1>
+        
+        <div class="transport-layout">
+            <!-- Left Panel: Flight Options -->
+            <div class="flights-panel">
+                <h2 class="panel-title">Available Flights</h2>
+                
+                <div class="route-info">
+                    <div class="route-point">
+                        <div class="route-label">From</div>
+                        <div class="route-location">UCLA Medical, Los Angeles</div>
+                    </div>
+                    <div class="route-arrow">→</div>
+                    <div class="route-point">
+                        <div class="route-label">To</div>
+                        <div class="route-location">Boston General, Boston</div>
+                    </div>
+                </div>
+                
+                <div id="flightsList" class="flights-list">
+                    <!-- Flights will be loaded here -->
+                </div>
+                
+                <div class="flight-actions">
+                    <button class="btn btn-primary" onclick="loadFlights()">
+                        <i class="fas fa-sync-alt"></i> Refresh Flights
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Right Panel: Transport Summary -->
+            <div class="transport-summary-panel">
+                <h2 class="panel-title">Transport Summary</h2>
+                
+                <div class="summary-card">
+                    <div class="summary-header">
+                        <div class="organ-icon-large">🫀</div>
+                        <div>
+                            <div class="summary-organ-id">Organ {{ organ_id }}</div>
+                            <div class="summary-organ-type">Heart Transplant</div>
+                        </div>
+                    </div>
+                    
+                    <div class="summary-details">
+                        <div class="summary-row">
+                            <span class="label">📍 From:</span>
+                            <span class="value">UCLA Medical</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="label">🏥 To:</span>
+                            <span class="value">Boston General</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="label">👤 Recipient:</span>
+                            <span class="value">{{ recipient_id }}</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="label">⏱️ Total Delivery ETA:</span>
+                            <span class="value">6.3 hours</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="label">💚 Viable for:</span>
+                            <span class="value highlight">5.8 hours</span>
+                        </div>
+                    </div>
+                    
+                    <div class="risk-alert">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Risk Alert:</strong> ETA exceeds viability window
+                    </div>
+                    
+                    <div class="weather-info">
+                        <h3>Weather Conditions</h3>
+                        <div id="weatherDisplay" class="weather-display">
+                            <div class="weather-item">
+                                <span>Los Angeles: ☀️ Clear, 22°C</span>
+                            </div>
+                            <div class="weather-item">
+                                <span>Boston: 🌧️ Light Rain, 15°C</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-success btn-block">
+                        <i class="fas fa-check"></i> Book Selected Flight
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadFlights() {
+    showLoading();
+    
+    try {
+        const response = await fetch('/api/flight-options', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ origin: 'Los Angeles', destination: 'Boston' })
+        });
+        
+        const data = await response.json();
+        displayFlights(data.flights);
+        hideLoading();
+    } catch (error) {
+        hideLoading();
+        showNotification('Error loading flights', 'error');
+    }
+}
+
+function displayFlights(flights) {
+    const container = document.getElementById('flightsList');
+    container.innerHTML = '';
+    
+    flights.forEach(flight => {
+        const flightCard = document.createElement('div');
+        flightCard.className = 'flight-card';
+        flightCard.innerHTML = `
+            <div class="flight-header">
+                <div class="flight-airline">${flight.airline} ${flight.flight_number}</div>
+                <div class="weather-risk risk-${flight.weather_risk.toLowerCase()}">${flight.weather_icon} ${flight.weather_risk}</div>
+            </div>
+            <div class="flight-details">
+                <div class="flight-time">
+                    <div class="time-item">
+                        <div class="time-label">Departure</div>
+                        <div class="time-value">${flight.departure}</div>
+                    </div>
+                    <div class="flight-duration">${flight.duration}</div>
+                    <div class="time-item">
+                        <div class="time-label">Arrival</div>
+                        <div class="time-value">${flight.arrival}</div>
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-secondary btn-block">Select Flight</button>
+        `;
+        container.appendChild(flightCard);
+    });
+}
+
+// Load flights on page load
+window.addEventListener('load', () => {
+    loadFlights();
+});
+</script>
+{% endblock %}

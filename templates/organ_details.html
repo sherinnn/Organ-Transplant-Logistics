@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block title %}Organ Viability Check - OrganMatch{% endblock %}
+
+{% block body %}
+<!-- Header -->
+<div class="header">
+    <div class="header-content">
+        <a href="/" class="logo">
+            <div class="logo-icon">
+                <i class="fas fa-heartbeat"></i>
+            </div>
+            <span class="logo-text">OrganMatch</span>
+        </a>
+        
+        <div class="header-nav">
+            <div class="system-status">
+                <div class="status-indicator online"></div>
+                <span class="status-text">System Online</span>
+            </div>
+            <a href="/" class="about-btn">Home</a>
+            <i class="fas fa-user-circle user-icon"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Main Layout with Sidebar -->
+<div class="app-container">
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+        <a href="/dashboard" class="nav-item">
+            <i class="fas fa-home"></i>
+            <span>Dashboard</span>
+        </a>
+        <a href="/organ-details" class="nav-item active">
+            <i class="fas fa-heartbeat"></i>
+            <span>Organ Viability</span>
+        </a>
+        <a href="/matching" class="nav-item">
+            <i class="fas fa-sync-alt"></i>
+            <span>Matching</span>
+        </a>
+        <a href="/transport" class="nav-item">
+            <i class="fas fa-plane"></i>
+            <span>Transport</span>
+        </a>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-panel">
+        <h1 class="page-title">🧬 Organ Details & Viability Check</h1>
+        
+        <div class="two-column-layout">
+            <!-- Left: Form -->
+            <div class="form-panel">
+                <h2 class="panel-title">Organ Entry Form</h2>
+                
+                <form id="viabilityForm" class="organ-form">
+                    <div class="form-group">
+                        <label for="donor_id">Donor ID</label>
+                        <input type="text" id="donor_id" name="donor_id" value="{{ organ_id or 'D' + range(100, 999)|random|string }}" readonly>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="organ_type">Organ Type</label>
+                        <select id="organ_type" name="organ_type" required>
+                            <option value="heart">Heart</option>
+                            <option value="liver">Liver</option>
+                            <option value="kidney">Kidney</option>
+                            <option value="lung">Lung</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="condition_score">Condition Score (0-100)</label>
+                        <input type="range" id="condition_score" name="condition_score" min="0" max="100" value="85" oninput="this.nextElementSibling.value = this.value">
+                        <output>85</output>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="donation_time">Time of Death</label>
+                        <input type="datetime-local" id="donation_time" name="donation_time" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="temperature">Temperature (°C)</label>
+                        <input type="number" id="temperature" name="temperature" value="4" min="-10" max="40" step="0.1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="blood_type">Blood Type</label>
+                        <select id="blood_type" name="blood_type">
+                            <option value="O+">O+</option>
+                            <option value="O-">O-</option>
+                            <option value="A+">A+</option>
+                            <option value="A-">A-</option>
+                            <option value="B+">B+</option>
+                            <option value="B-">B-</option>
+                            <option value="AB+">AB+</option>
+                            <option value="AB-">AB-</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-flask"></i> Run Viability Check
+                    </button>
+                </form>
+            </div>
+            
+            <!-- Right: Results -->
+            <div class="results-panel">
+                <h2 class="panel-title">Viability Result</h2>
+                
+                <div id="viabilityResults" class="results-content hidden">
+                    <div class="result-card">
+                        <div class="result-header">
+                            <div class="organ-icon">🫀</div>
+                            <div>
+                                <div class="result-organ-type" id="result_organ_type">Heart</div>
+                                <div class="result-status" id="result_status">Viable</div>
+                            </div>
+                        </div>
+                        
+                        <div class="result-stats">
+                            <div class="result-stat">
+                                <div class="stat-label">Time Since Death</div>
+                                <div class="stat-value" id="result_hours_elapsed">0h</div>
+                            </div>
+                            <div class="result-stat">
+                                <div class="stat-label">Viable For</div>
+                                <div class="stat-value highlight" id="result_hours_left">0h</div>
+                            </div>
+                            <div class="result-stat">
+                                <div class="stat-label">Condition</div>
+                                <div class="stat-value" id="result_condition">Excellent</div>
+                            </div>
+                            <div class="result-stat">
+                                <div class="stat-label">Urgency</div>
+                                <div class="stat-value" id="result_urgency">Low</div>
+                            </div>
+                        </div>
+                        
+                        <div class="result-recommendation" id="result_recommendation">
+                            Proceed with transport
+                        </div>
+                        
+                        <a href="/matching" class="btn btn-success btn-block">
+                            <i class="fas fa-arrow-right"></i> Proceed to Matching
+                        </a>
+                    </div>
+                </div>
+                
+                <div id="resultsPlaceholder" class="results-placeholder">
+                    <i class="fas fa-vial"></i>
+                    <p>Run a viability check to see results</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('donation_time').valueAsDate = new Date(Date.now() - 3 * 3600000);
+
+document.getElementById('viabilityForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData);
+    
+    showLoading();
+    
+    try {
+        const response = await fetch('/api/check-viability', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        displayResults(result, data.organ_type);
+        hideLoading();
+        showNotification('Viability check completed!', 'success');
+    } catch (error) {
+        hideLoading();
+        showNotification('Error running viability check', 'error');
+    }
+});
+
+function displayResults(result, organType) {
+    document.getElementById('resultsPlaceholder').style.display = 'none';
+    document.getElementById('viabilityResults').classList.remove('hidden');
+    
+    document.getElementById('result_organ_type').textContent = organType.charAt(0).toUpperCase() + organType.slice(1);
+    document.getElementById('result_status').textContent = result.is_viable ? '✅ Viable' : '❌ Not Viable';
+    document.getElementById('result_hours_elapsed').textContent = result.hours_elapsed + 'h';
+    document.getElementById('result_hours_left').textContent = result.hours_left + 'h';
+    document.getElementById('result_condition').textContent = 'Score: ' + document.getElementById('condition_score').value;
+    document.getElementById('result_urgency').textContent = result.urgency;
+    document.getElementById('result_recommendation').textContent = result.recommendation;
+}
+</script>
+{% endblock %}

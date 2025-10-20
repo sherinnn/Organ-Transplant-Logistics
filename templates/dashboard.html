@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Mission Control - OrganMatch{% endblock %}
+
+{% block body %}
+<!-- Header -->
+<div class="header">
+    <div class="header-content">
+        <a href="/" class="logo">
+            <div class="logo-icon">
+                <i class="fas fa-heartbeat"></i>
+            </div>
+            <span class="logo-text">OrganMatch</span>
+        </a>
+        
+        <div class="header-nav">
+            <div class="system-status">
+                <div class="status-indicator online"></div>
+                <span class="status-text">System Online</span>
+            </div>
+            <a href="/" class="about-btn">Home</a>
+            <i class="fas fa-user-circle user-icon"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Main Layout with Sidebar -->
+<div class="app-container">
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+        <a href="/dashboard" class="nav-item active">
+            <i class="fas fa-home"></i>
+            <span>Dashboard</span>
+        </a>
+        <a href="/organ-details" class="nav-item">
+            <i class="fas fa-heartbeat"></i>
+            <span>Organ Viability</span>
+        </a>
+        <a href="/matching" class="nav-item">
+            <i class="fas fa-sync-alt"></i>
+            <span>Matching</span>
+        </a>
+        <a href="/transport" class="nav-item">
+            <i class="fas fa-plane"></i>
+            <span>Transport</span>
+        </a>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-panel">
+        <div class="dashboard-header">
+            <h1 class="page-title">🫀 Mission Control Dashboard</h1>
+            <div class="dashboard-actions">
+                <button class="btn btn-primary" onclick="location.href='/organ-details'">
+                    <i class="fas fa-plus"></i> Add New Organ
+                </button>
+                <button class="btn btn-secondary" onclick="location.href='/matching'">
+                    <i class="fas fa-sync-alt"></i> Run Matching
+                </button>
+            </div>
+        </div>
+        
+        <!-- Summary Stats -->
+        <div class="stats-grid">
+            <div class="stat-card stat-green">
+                <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ stats.active_organs }}</div>
+                    <div class="stat-label">Active Organs</div>
+                </div>
+            </div>
+            
+            <div class="stat-card stat-orange">
+                <div class="stat-icon"><i class="fas fa-plane"></i></div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ stats.in_transit }}</div>
+                    <div class="stat-label">In Transit</div>
+                </div>
+            </div>
+            
+            <div class="stat-card stat-red">
+                <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ stats.expiring_soon }}</div>
+                    <div class="stat-label">Expiring Soon</div>
+                </div>
+            </div>
+            
+            <div class="stat-card stat-blue">
+                <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ stats.success_rate }}</div>
+                    <div class="stat-label">Success Rate</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Organ Cards Grid -->
+        <div class="organs-section">
+            <h2 class="section-title">Active Organs</h2>
+            
+            <div class="organ-cards-grid">
+                {% for organ in organs %}
+                <div class="organ-card organ-{{ organ.status }}">
+                    <div class="organ-card-header">
+                        <div class="organ-id">{{ organ.id }}</div>
+                        <div class="status-badge status-{{ organ.status }}">
+                            {% if organ.status == 'healthy' %}
+                                🟢 Healthy
+                            {% elif organ.status == 'expiring' %}
+                                🟠 Expiring
+                            {% else %}
+                                🔴 Critical
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="organ-info">
+                        <div class="organ-type">
+                            {% if organ.type == 'Heart' %}🫀
+                            {% elif organ.type == 'Liver' %}🫁
+                            {% elif organ.type == 'Kidney' %}🫘
+                            {% endif %}
+                            {{ organ.type }}
+                        </div>
+                        <div class="organ-detail">
+                            <span class="label">Condition:</span>
+                            <span class="value">{{ organ.condition_score }}/100</span>
+                        </div>
+                        <div class="organ-detail">
+                            <span class="label">Viable for:</span>
+                            <span class="value time-left">{{ organ.hours_left }}h</span>
+                        </div>
+                        <div class="organ-detail">
+                            <span class="label">Location:</span>
+                            <span class="value">{{ organ.location }}</span>
+                        </div>
+                        {% if organ.matched_recipient %}
+                        <div class="organ-detail">
+                            <span class="label">Matched:</span>
+                            <span class="value">{{ organ.matched_recipient }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="organ-actions">
+                        <a href="/organ-details?id={{ organ.id }}" class="btn-small btn-view">View</a>
+                        <a href="/matching?id={{ organ.id }}" class="btn-small btn-match">Match</a>
+                        {% if organ.matched_recipient %}
+                        <a href="/transport?id={{ organ.id }}&recipient={{ organ.matched_recipient }}" class="btn-small btn-transport">Transport</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

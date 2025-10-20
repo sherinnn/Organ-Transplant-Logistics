@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}Matching Engine - OrganMatch{% endblock %}
+
+{% block body %}
+<!-- Header -->
+<div class="header">
+    <div class="header-content">
+        <a href="/" class="logo">
+            <div class="logo-icon">
+                <i class="fas fa-heartbeat"></i>
+            </div>
+            <span class="logo-text">OrganMatch</span>
+        </a>
+        
+        <div class="header-nav">
+            <div class="system-status">
+                <div class="status-indicator online"></div>
+                <span class="status-text">System Online</span>
+            </div>
+            <a href="/" class="about-btn">Home</a>
+            <i class="fas fa-user-circle user-icon"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Main Layout with Sidebar -->
+<div class="app-container">
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+        <a href="/dashboard" class="nav-item">
+            <i class="fas fa-home"></i>
+            <span>Dashboard</span>
+        </a>
+        <a href="/organ-details" class="nav-item">
+            <i class="fas fa-heartbeat"></i>
+            <span>Organ Viability</span>
+        </a>
+        <a href="/matching" class="nav-item active">
+            <i class="fas fa-sync-alt"></i>
+            <span>Matching</span>
+        </a>
+        <a href="/transport" class="nav-item">
+            <i class="fas fa-plane"></i>
+            <span>Transport</span>
+        </a>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-panel">
+        <h1 class="page-title">🧮 Matching Engine</h1>
+        
+        <div class="matching-controls">
+            <div class="form-inline">
+                <div class="form-group-inline">
+                    <label>Organ Type:</label>
+                    <select id="match_organ_type">
+                        <option value="heart">Heart</option>
+                        <option value="liver">Liver</option>
+                        <option value="kidney">Kidney</option>
+                        <option value="lung">Lung</option>
+                    </select>
+                </div>
+                
+                <div class="form-group-inline">
+                    <label>Blood Type:</label>
+                    <select id="match_blood_type">
+                        <option value="O+">O+</option>
+                        <option value="O-">O-</option>
+                        <option value="A+">A+</option>
+                        <option value="A-">A-</option>
+                        <option value="B+">B+</option>
+                        <option value="B-">B-</option>
+                        <option value="AB+">AB+</option>
+                        <option value="AB-">AB-</option>
+                    </select>
+                </div>
+                
+                <button class="btn btn-primary" onclick="runMatching()">
+                    <i class="fas fa-sync-alt"></i> Find Matches
+                </button>
+            </div>
+        </div>
+        
+        <div class="matching-results">
+            <div class="results-table-container">
+                <h2 class="section-title">Recipient Matches</h2>
+                
+                <table id="matchesTable" class="matches-table">
+                    <thead>
+                        <tr>
+                            <th>Recipient ID</th>
+                            <th>Blood Type</th>
+                            <th>Match Score</th>
+                            <th>Distance (km)</th>
+                            <th>Urgency</th>
+                            <th>Hospital</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="matchesTableBody">
+                        <tr>
+                            <td colspan="8" class="no-data">Run matching to see results</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="match-details-panel" id="matchDetailsPanel" style="display: none;">
+                <h3 class="panel-title">Best Match Details</h3>
+                <div class="match-card">
+                    <div class="match-recipient-id" id="detail_recipient_id">R045</div>
+                    <div class="match-info">
+                        <div class="info-row">
+                            <span class="label">🏥 Hospital:</span>
+                            <span class="value" id="detail_hospital">Boston General</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">🧫 Blood Type:</span>
+                            <span class="value" id="detail_blood_type">O+</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">📈 Match Confidence:</span>
+                            <span class="value highlight" id="detail_match_score">89%</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">📍 Distance:</span>
+                            <span class="value" id="detail_distance">420 km</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">⚠️ Urgency:</span>
+                            <span class="value" id="detail_urgency">5/5</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-success btn-block" onclick="confirmMatch()">
+                        <i class="fas fa-check"></i> Confirm Match & Plan Transport
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let selectedMatch = null;
+
+async function runMatching() {
+    const organType = document.getElementById('match_organ_type').value;
+    const bloodType = document.getElementById('match_blood_type').value;
+    
+    showLoading();
+    
+    try {
+        const response = await fetch('/api/find-matches', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ organ_type: organType, blood_type: bloodType })
+        });
+        
+        const data = await response.json();
+        displayMatches(data.matches);
+        hideLoading();
+        showNotification('Matching completed!', 'success');
+    } catch (error) {
+        hideLoading();
+        showNotification('Error finding matches', 'error');
+    }
+}
+
+function displayMatches(matches) {
+    const tbody = document.getElementById('matchesTableBody');
+    tbody.innerHTML = '';
+    
+    matches.forEach((match, index) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><strong>${match.id}</strong></td>
+            <td>${match.blood_type}</td>
+            <td><span class="match-score">${(match.match_score * 100).toFixed(0)}%</span></td>
+            <td>${match.distance_km} km</td>
+            <td><span class="urgency-badge urgency-${match.urgency}">${match.urgency}/5</span></td>
+            <td>${match.hospital}</td>
+            <td><span class="status-badge ${match.status === 'Best Match' ? 'status-healthy' : 'status-pending'}">${match.status}</span></td>
+            <td><button class="btn-small btn-view" onclick='selectMatch(${JSON.stringify(match)})'>Select</button></td>
+        `;
+        tbody.appendChild(row);
+    });
+    
+    if (matches.length > 0) {
+        selectMatch(matches[0]);
+    }
+}
+
+function selectMatch(match) {
+    selectedMatch = match;
+    document.getElementById('matchDetailsPanel').style.display = 'block';
+    document.getElementById('detail_recipient_id').textContent = match.id;
+    document.getElementById('detail_hospital').textContent = match.hospital;
+    document.getElementById('detail_blood_type').textContent = match.blood_type;
+    document.getElementById('detail_match_score').textContent = (match.match_score * 100).toFixed(0) + '%';
+    document.getElementById('detail_distance').textContent = match.distance_km + ' km';
+    document.getElementById('detail_urgency').textContent = match.urgency + '/5';
+}
+
+function confirmMatch() {
+    if (selectedMatch) {
+        window.location.href = `/transport?recipient=${selectedMatch.id}`;
+    }
+}
+
+// Auto-run on load
+window.addEventListener('load', () => {
+    runMatching();
+});
+</script>
+{% endblock %}
